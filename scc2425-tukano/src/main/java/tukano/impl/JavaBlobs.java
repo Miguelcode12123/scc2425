@@ -14,6 +14,8 @@ import main.java.tukano.impl.storage.BlobStorage;
 import main.java.tukano.impl.storage.BlobSystemStorage;
 import main.java.utils.Hash;
 import main.java.utils.Hex;
+import main.java.utils.RedisCache; // Import for the Cache
+import redis.clients.jedis.Jedis;
 
 public class JavaBlobs implements Blobs {
 	
@@ -41,7 +43,15 @@ public class JavaBlobs implements Blobs {
 		if (!validBlobId(blobId, token))
 			return error(FORBIDDEN);
 
-		return storage.write( toPath( blobId ), bytes);
+		Result<Void> result = storage.write(toPath(blobId), bytes);
+
+		// Clear cache on upload
+		try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+			jedis.set("blob:" + blobId, Hex.of(Hash.sha256(bytes)));
+			jedis.expire("blob:" + blobId, 3600);
+		}
+
+		return result;
 	}
 
 	@Override
@@ -51,6 +61,14 @@ public class JavaBlobs implements Blobs {
 		if( ! validBlobId( blobId, token ) )
 			return error(FORBIDDEN);
 
+		// Try to fecth it from cache
+		try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+			String cachedData = jedis.get("blob:" + blobId);
+			if (cachedData != null) {
+				return Result.ok(cachedData.getBytes());
+			}
+		}
+		// If not in cache
 		return storage.read( toPath( blobId ) );
 	}
 
@@ -70,6 +88,11 @@ public class JavaBlobs implements Blobs {
 	
 		if( ! validBlobId( blobId, token ) )
 			return error(FORBIDDEN);
+
+		// Clear cache on delete
+		try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+			jedis.del("blob:" + blobId);
+		}
 
 		return storage.delete( toPath(blobId));
 	}

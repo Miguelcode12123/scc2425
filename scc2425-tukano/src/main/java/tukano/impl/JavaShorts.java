@@ -23,6 +23,10 @@ import main.java.tukano.impl.data.Following;
 import main.java.tukano.impl.data.Likes;
 import main.java.tukano.impl.rest.TukanoRestServer;
 import main.java.utils.CosmosDB;
+import main.java.utils.JSON;
+import main.java.utils.RedisCache;
+import redis.clients.jedis.Jedis;
+
 
 public class JavaShorts implements Shorts {
 
@@ -60,12 +64,27 @@ public class JavaShorts implements Shorts {
 		if( shortId == null )
 			return error(BAD_REQUEST);
 
-		var query = format("SELECT count(*) FROM Likes l WHERE l.shortId = '%s'", shortId);
-		var likes = CosmosDB.sql(query, Long.class);
-		return errorOrValue( getOne(shortId, Short.class), shrt -> shrt.copyWithLikes_And_Token( likes.get(0)));
-	}
+		try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+		 	// Check if the short is in cache
+			String cachedShort = jedis.get("short:" + shortId);
+			if (cachedShort != null) {
+				// Short found in cache, let's decode and return
+				return ok(JSON.decode(cachedShort, Short.class));
+			} else {
+				var query = format("SELECT count(*) FROM Likes l WHERE l.shortId = '%s'", shortId);
+				var likes = CosmosDB.sql(query, Long.class);
+				Result<Short> result = errorOrValue(getOne(shortId, Short.class), shrt -> shrt.copyWithLikes_And_Token( likes.get(0)));
 
-	
+				if (result.isOK()) {
+					jedis.set("short:" + shortId, JSON.encode(result.value()));
+					jedis.expire("short:" + shortId, 3600); // 1 hour expiration
+				}
+				return result;
+			}
+		}
+
+		}
+
 	@Override
 	public Result<Void> deleteShort(String shortId, String password) {
 		Log.info(() -> format("deleteShort : shortId = %s, pwd = %s\n", shortId, password));
@@ -85,6 +104,10 @@ public class JavaShorts implements Shorts {
 				// Step 5: Delete the blob associated with the Short
 				operations.add(() -> JavaBlobs.getInstance().delete(shrt.getBlobUrl(), Token.get()));
 
+				// Clear cache
+				try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+					jedis.del("short:" + shortId);
+				}
 				return CosmosDB.transaction(operations, shortId);
 			});
 		});
@@ -186,6 +209,10 @@ public class JavaShorts implements Shorts {
 		List<Short> shortsList = CosmosDB.sql(shortsQuery, Short.class);
 		for (Short shrt : shortsList) {
 			operations.add(() -> CosmosDB.deleteOne(shrt));
+			// Clear cache for each deleted short
+			try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+				jedis.del("short:" + shrt.getShortId());
+			}
 		}
 
 		List<Following> followingList = CosmosDB.sql(followersQuery, Following.class);

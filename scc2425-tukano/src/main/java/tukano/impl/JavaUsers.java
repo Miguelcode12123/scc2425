@@ -16,6 +16,9 @@ import main.java.tukano.api.Result;
 import main.java.tukano.api.User;
 import main.java.tukano.api.Users;
 import main.java.utils.CosmosDB;
+import main.java.utils.JSON;
+import main.java.utils.RedisCache; // Import for the Cache
+import redis.clients.jedis.Jedis;
 
 public class JavaUsers implements Users {
 	
@@ -47,8 +50,26 @@ public class JavaUsers implements Users {
 
 		if (userId == null)
 			return error(BAD_REQUEST);
-		
-		return validatedUserOrError( CosmosDB.getOne( userId, User.class), pwd);
+
+		try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+			// Check if the user is in cache
+			String cachedUser = jedis.get("user:" + userId);
+			if (cachedUser != null) {
+				// User found in cache, let's decode and return
+				User userFromCache = JSON.decode(cachedUser, User.class);
+				return validatedUserOrError(ok(userFromCache), pwd);
+			} else {
+				// User not in cache, fetch from database
+				Result<User> result = validatedUserOrError(CosmosDB.getOne(userId, User.class), pwd);
+
+				// Cache the user with 1 hour time expiration (we can change)
+				if (result.isOK()) {
+					jedis.set("user:" + userId, JSON.encode(result.value()));
+					jedis.expire("user:" + userId, 3600);
+				}
+				return result;
+			}
+		}
 	}
 
 	@Override
@@ -58,7 +79,16 @@ public class JavaUsers implements Users {
 		if (badUpdateUserInfo(userId, pwd, other))
 			return error(BAD_REQUEST);
 
-		return errorOrResult( validatedUserOrError(CosmosDB.getOne( userId, User.class), pwd), user -> CosmosDB.updateOne( user.updateFrom(other)));
+		return errorOrResult( validatedUserOrError(CosmosDB.getOne( userId, User.class), pwd), user -> {
+			Result<User> updatedUser = CosmosDB.updateOne(user.updateFrom(other));
+
+			// Update the cache again with 1 hour expiration
+			try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+				jedis.set("user:" + userId, JSON.encode(updatedUser));
+				jedis.expire("user:" + userId, 3600); // 1 hour expiration
+			}
+			return updatedUser;
+		});
 	}
 
 	@Override
@@ -75,7 +105,12 @@ public class JavaUsers implements Users {
 				JavaShorts.getInstance().deleteAllShorts(userId, pwd, Token.get(userId));
 				JavaBlobs.getInstance().deleteAllBlobs(userId, Token.get(userId));
 			}).start();
-			
+
+			// Remove from cache
+			try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+				jedis.del("user" + userId);
+			}
+
 			return CosmosDB.deleteOne( user);
 		});
 	}
