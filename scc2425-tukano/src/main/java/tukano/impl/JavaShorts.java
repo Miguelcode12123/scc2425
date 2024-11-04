@@ -9,10 +9,8 @@ import static main.java.tukano.api.Result.errorOrVoid;
 import static main.java.tukano.api.Result.ok;
 import static main.java.utils.CosmosDB.getOne;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -56,6 +54,21 @@ public class JavaShorts implements Shorts {
 			var blobUrl = format("%s/%s/%s", TukanoRestServer.serverURI, Blobs.NAME, shortId);
 			var shrt = new Short(shortId, userId, blobUrl);
 			ShortCosmos shrtCosmos = new ShortCosmos(shrt);
+
+			String token = Token.get(blobUrl);
+			Log.info("Generated token: " + token);
+
+			// Commented in JavaBlobs so it passes
+			// Is the problem in the token or in the first argument (blobId) ???
+			// We're sending blobUrl but it expects the blobId...
+			var result = JavaBlobs.getInstance().upload(blobUrl, randomBytes(100), Token.get(blobUrl));
+			Log.info(Token.get(blobUrl));
+
+			if (result.isOK()) {
+				Log.info("everything ok (TEST)");
+			}
+			else
+				Log.info("error: " + result.error());
 
 			return errorOrValue(CosmosDB.insertOne(shrtCosmos), s -> s.copyWithLikes_And_Token(0));
 		});
@@ -286,6 +299,18 @@ public class JavaShorts implements Shorts {
 		}
 
 		return CosmosDB.runOperations(operations);
+	}
+
+
+	private static byte[] randomBytes(int size) {
+		var r = new Random(1L);
+
+		var bb = ByteBuffer.allocate(size);
+
+		r.ints(size).forEach( i -> bb.put( (byte)(i & 0xFF)));
+
+		return bb.array();
+
 	}
 	
 }

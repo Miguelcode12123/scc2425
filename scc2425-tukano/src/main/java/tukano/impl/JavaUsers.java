@@ -60,13 +60,12 @@ public class JavaUsers implements Users {
 			// Check if the user is in cache
 			String cachedUser = jedis.get("user:" + userId);
 			if (cachedUser != null) {
-				// User found in cache, let's decode and return
 				User userFromCache = JSON.decode(cachedUser, User.class);
+
 				Log.info( () -> format("User %s was in cache", userId));
 				return validatedUserOrError(ok(userFromCache), pwd);
 			} else {
 				Log.info( () -> format("User %s was not found in cache", userId));
-				// User not in cache, fetch from database
 				Result<User> result = validatedUserOrError(CosmosDB.getOne(userId, User.class), pwd);
 
 				// Cache the user with 1 hour time expiration (we can change)
@@ -90,10 +89,14 @@ public class JavaUsers implements Users {
 			UserCosmos cosmosUser = new UserCosmos(newUser);
 			Result<User> updatedUser = CosmosDB.updateOne(cosmosUser);
 
-			// Update the cache again with 1 hour expiration
-			try (Jedis jedis = RedisCache.getCachePool().getResource()) {
-				jedis.setex("user:" + userId, 3600, JSON.encode(newUser)); // 1 hour expiration
+			if(updatedUser.isOK()) {
+				// Update the cache again with 1 hour expiration
+				try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+					jedis.setex("user:" + userId, 3600, JSON.encode(newUser));
+					Log.info("User updated in cache \n");
+				}
 			}
+
 			return updatedUser;
 		});
 	}
@@ -107,16 +110,18 @@ public class JavaUsers implements Users {
 
 		return errorOrResult( validatedUserOrError(CosmosDB.getOne( userId, User.class), pwd), user -> {
 
+			// Remove from cache
+			try (Jedis jedis = RedisCache.getCachePool().getResource()) {
+				jedis.del("user:" + userId);
+				Log.info("User removed from cache \n");
+			}
+
 			// Delete user shorts and related info asynchronously in a separate thread
 			Executors.defaultThreadFactory().newThread( () -> {
 				JavaShorts.getInstance().deleteAllShorts(userId, pwd, Token.get(userId));
 				JavaBlobs.getInstance().deleteAllBlobs(userId, Token.get(userId));
 			}).start();
 
-			// Remove from cache
-			try (Jedis jedis = RedisCache.getCachePool().getResource()) {
-				jedis.del("user:" + userId);
-			}
 			UserCosmos cosmosUser = new UserCosmos(user);
 			return CosmosDB.deleteOne( cosmosUser);
 		});

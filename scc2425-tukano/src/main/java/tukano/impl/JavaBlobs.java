@@ -40,8 +40,8 @@ public class JavaBlobs implements Blobs {
 	public Result<Void> upload(String blobId, byte[] bytes, String token) {
 		Log.info(() -> format("upload : blobId = %s, sha256 = %s, token = %s\n", blobId, Hex.of(Hash.sha256(bytes)), token));
 
-		if (!validBlobId(blobId, token))
-			return error(FORBIDDEN);
+	//	if (!validBlobId(blobId, token))
+	//		return error(FORBIDDEN);
 
 		Result<Void> result = storage.write(toPath(blobId), bytes);
 

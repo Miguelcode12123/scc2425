@@ -5,6 +5,9 @@ import main.java.tukano.api.Blobs;
 import main.java.tukano.api.rest.RestBlobs;
 import main.java.tukano.impl.JavaBlobs;
 
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 @Singleton
 public class RestBlobsResource extends RestResource implements RestBlobs {
 
@@ -21,6 +24,7 @@ public class RestBlobsResource extends RestResource implements RestBlobs {
 
 	@Override
 	public byte[] download(String blobId, String token) {
+		triggerViewIncrement(blobId);
 		return super.resultOrThrow( impl.download( blobId, token ));
 	}
 
@@ -32,5 +36,18 @@ public class RestBlobsResource extends RestResource implements RestBlobs {
 	@Override
 	public void deleteAllBlobs(String userId, String password) {
 		super.resultOrThrow( impl.deleteAllBlobs( userId, password ));
+	}
+
+	private void triggerViewIncrement(String blobId) {
+		String incrementViewsUrl = "https://fun70663westeurope.azurewebsites.net/api/tukano/rest/blobs/" + blobId + "/incrementViews";
+
+		try {
+			HttpURLConnection connection = (HttpURLConnection) new URL(incrementViewsUrl).openConnection();
+			connection.setRequestMethod("POST");
+			connection.getResponseCode(); // Trigger the function
+			connection.disconnect();
+		} catch (Exception e) {
+			e.printStackTrace(); // Log any issues for debugging
+		}
 	}
 }

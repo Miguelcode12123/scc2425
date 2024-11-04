@@ -1,0 +1,14 @@
+# Ignore target directory
+target/
+
+# Ignore compiled class files
+*.class
+
+# Ignore IDE-specific files (if applicable)
+.idea/
+*.iml
+*.class
+*.log
+
+# Ignore local configuration files
+*.properties
