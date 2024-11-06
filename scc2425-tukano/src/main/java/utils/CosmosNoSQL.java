@@ -106,6 +106,7 @@ public class CosmosNoSQL {
     public <T> Result<T> getOne(String id, Class<T> clazz) {
         return tryCatch( () -> {
             selectContainerClass(clazz);
+            System.err.println("OBJECT CLASS " + clazz);
             return this.selectedContainer.readItem(id, new PartitionKey(id), clazz).getItem();
         });
     }

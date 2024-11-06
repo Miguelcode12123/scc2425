@@ -12,9 +12,15 @@ import com.microsoft.azure.functions.annotation.HttpTrigger;
 
 import java.util.Optional;
 
+/**
+ * Azure Function that increments the view count for a specific blob identified by its blobId.
+ * This function is triggered by an HTTP POST request, where the blobId is provided as part of the URL.
+ * It calls the BlobViewsCounter service to update the view count in the CosmosDB.
+ * If the view count is successfully incremented, it returns an HTTP 200 OK response.
+ */
 public class IncrementViewsFunction {
     private static final String HTTP_TRIGGER_NAME = "req";
-    private static final String HTTP_FUNCTION_NAME = "BlobViewCounter";
+    private static final String HTTP_FUNCTION_NAME = "BlobCounter";
     private static final String HTTP_TRIGGER_ROUTE = "tukano/rest/blobs/{blobId}/incrementViews";
 
     @FunctionName(HTTP_FUNCTION_NAME)
@@ -30,21 +36,23 @@ public class IncrementViewsFunction {
 
         context.getLogger().info("Incrementing view count for blob: " + blobId);
 
-        // Check if blobId is provided
+        // Check if the blobId parameter is provided in the route.
         if (blobId == null || blobId.isEmpty()) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
                     .body("Blob ID is missing.")
                     .build();
         }
 
-        // Increment views in CosmosDB
+        // Call the incrementViewCount method to update the view count in CosmosDB.
         boolean success = BlobViewsCounter.incrementViewCount(blobId);
 
         if (success) {
+            // If the update was successful, respond with HTTP 200 OK.
             return request.createResponseBuilder(HttpStatus.OK)
                     .body("View count incremented successfully.")
                     .build();
         } else {
+            // If there was an error, respond with HTTP 500 Internal Server Error.
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error incrementing view count.")
                     .build();

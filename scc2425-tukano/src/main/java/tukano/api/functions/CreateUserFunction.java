@@ -14,6 +14,11 @@ import main.java.utils.CosmosDB;
 
 import java.util.Optional;
 
+/**
+ * Azure Function that handles the creation of a new user.
+ * This function is triggered by an HTTP POST request, and it attempts to insert the user data into the CosmosDB.
+ * The function expects the user data to be provided in the request body.
+ */
 public class CreateUserFunction {
     private static final String HTTP_TRIGGER_NAME="req";
     private static final String HTTP_FUNCTION_NAME="CreateUser";
@@ -31,7 +36,7 @@ public class CreateUserFunction {
 
         context.getLogger().info("Creating a new user.");
 
-        // Check if the body is present
+        // Check if the request body contains user data.
         if (request.getBody().isEmpty()) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
                     .body("User data is missing.")
@@ -42,15 +47,18 @@ public class CreateUserFunction {
         User user = request.getBody().get();
         UserCosmos uCosmos = new UserCosmos(user);
 
-        // Insert into CosmosDB
+        // Attempt to insert the user data into CosmosDB.
         boolean success = CosmosDB.insertOne(uCosmos).isOK();
+        // Some stats:
         // 4.21sec north central us
 
         if (success) {
+            // If insertion is successful, return a 201 Created response.
             return request.createResponseBuilder(HttpStatus.CREATED)
                     .body("User created successfully.")
                     .build();
         } else {
+            // If insertion fails, return a 500 Internal Server Error response.
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating user.")
                     .build();

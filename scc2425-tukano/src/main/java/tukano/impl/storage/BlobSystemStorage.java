@@ -25,6 +25,9 @@ public class BlobSystemStorage implements BlobStorage {
 
     private BlobContainerClient containerClient;
 
+    /**
+     * Constructor for BlobSystemStorage.
+     */
     public BlobSystemStorage() {
         // Initialize BlocContainerCLient
         containerClient = new BlobContainerClientBuilder()
@@ -34,6 +37,13 @@ public class BlobSystemStorage implements BlobStorage {
         Map<String, byte[]> map = new HashMap<>();
     }
 
+    /**
+     * Writes a blob to Azure Blob Storage.
+     *
+     * @param path The path (name) of the blob to be stored.
+     * @param bytes The byte data of the blob.
+     * @return A Result indicating whether the operation succeeded or failed.
+     */
     @Override
     public Result<Void> write(String path, byte[] bytes) {
         BlobClient blobClient = containerClient.getBlobClient(path);
@@ -41,6 +51,12 @@ public class BlobSystemStorage implements BlobStorage {
         return Result.ok();
     }
 
+    /**
+     * Deletes a specific blob from Azure Blob Storage.
+     *
+     * @param path The path (name) of the blob to be deleted.
+     * @return A Result indicating whether the operation succeeded or failed.
+     */
     @Override
     public Result<Void> delete(String path) {
         try {
@@ -61,12 +77,23 @@ public class BlobSystemStorage implements BlobStorage {
         }
     }
 
+    /**
+     * Deletes all blobs in a specific path (directory) in the Azure Blob Storage.
+     *
+     * @param path The directory path where blobs should be deleted.
+     * @return A Result indicating whether the operation succeeded or failed.
+     */
     public Result<Void> deleteAllBlobsInPath(String path) {
         try {
+            // List all blobs in the given path (directory)
             for (BlobItem blobItem : containerClient.listBlobsByHierarchy(path)) {
+                // Get the BlobClient for each blob in the directory
                 BlobClient blobClient = containerClient.getBlobClient(blobItem.getName());
+
+                // Delete each blob
                 blobClient.delete();
             }
+            // Return a successful result after deletion
             return Result.ok();
         } catch (Exception e) {
             System.err.println("EXCEPTION: " + e);
@@ -74,18 +101,37 @@ public class BlobSystemStorage implements BlobStorage {
         }
     }
 
+    /**
+     * Reads a blob's content from Azure Blob Storage.
+     *
+     * @param path The path (name) of the blob to read.
+     * @return A Result containing the byte data of the blob.
+     */
     @Override
     public Result<byte[]> read(String path) {
         return Result.ok(download(path));
     }
 
+
+    /**
+     * Reads a blob's content and sends it to the provided sink (consumer).
+     *
+     * @param path The path (name) of the blob to read.
+     * @param sink A Consumer that processes the byte data of the blob.
+     * @return A Result indicating whether the operation succeeded or failed.
+     */
     @Override
     public Result<Void> read(String path, Consumer<byte[]> sink) {
         downloadSink(path, sink);
         return Result.ok();
     }
 
-
+    /**
+     * Downloads the byte content of a specific blob.
+     *
+     * @param id The path (name) of the blob to download.
+     * @return The byte array content of the blob.
+     */
     private byte[] download(String id) {
         try {
             return containerClient.getBlobClient(id).downloadContent().toBytes();  // Download blob from Azure
@@ -94,6 +140,13 @@ public class BlobSystemStorage implements BlobStorage {
         }
     }
 
+    /**
+     * Downloads the byte content of a specific blob and processes it using the provided sink.
+     *
+     * @param id The path (name) of the blob to download.
+     * @param sink A Consumer that processes the byte data of the blob.
+     * @return The byte array content of the blob.
+     */
     private byte[] downloadSink (String id, Consumer<byte[]> sink) {
         try {
             return containerClient.getBlobClient(id).downloadContent().toBytes();  // Download blob from Azure
@@ -102,6 +155,11 @@ public class BlobSystemStorage implements BlobStorage {
         }
     }
 
+    /**
+     * Lists the names of all blobs in the container.
+     *
+     * @return A list of blob names as strings.
+     */
     private List<String> list() {
         List<String> blobNames = new ArrayList<>();
         for (BlobItem blobItem : containerClient.listBlobs()) {

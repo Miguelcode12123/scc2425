@@ -20,6 +20,10 @@ import main.java.tukano.api.Result;
 import main.java.utils.Hash;
 import main.java.utils.IO;
 
+/**
+ * FilesystemStorage is an implementation of the BlobStorage interface for storing
+ * files in the local file system.
+ */
 public class FilesystemStorage implements BlobStorage {
 	private final String rootDir;
 	private static final int CHUNK_SIZE = 4096;
@@ -28,7 +32,14 @@ public class FilesystemStorage implements BlobStorage {
 	public FilesystemStorage() {
 		this.rootDir = DEFAULT_ROOT_DIR;
 	}
-	
+
+	/**
+	 * Writes a blob (byte array) to the filesystem.
+	 *
+	 * @param path The path where the file will be stored
+	 * @param bytes The byte array representing the content to be written
+	 * @return A Result indicating success or failure of the write operation
+	 */
 	@Override
 	public Result<Void> write(String path, byte[] bytes) {
 		if (path == null)
@@ -47,6 +58,12 @@ public class FilesystemStorage implements BlobStorage {
 		return ok();
 	}
 
+	/**
+	 * Reads a blob from the filesystem.
+	 *
+	 * @param path The path to the file to be read
+	 * @return A Result containing the byte array or an error if the file does not exist
+	 */
 	@Override
 	public Result<byte[]> read(String path) {
 		if (path == null)
@@ -60,6 +77,14 @@ public class FilesystemStorage implements BlobStorage {
 		return bytes != null ? ok( bytes ) : error( INTERNAL_ERROR );
 	}
 
+	/**
+	 * Reads a blob from the filesystem in chunks.
+	 * It uses a consumer to process each chunk of the file.
+	 *
+	 * @param path The path to the file to be read
+	 * @param sink A consumer that processes each chunk of the file
+	 * @return A Result indicating success or failure of the read operation
+	 */
 	@Override
 	public Result<Void> read(String path, Consumer<byte[]> sink) {
 		if (path == null)
@@ -72,7 +97,13 @@ public class FilesystemStorage implements BlobStorage {
 		IO.read( file, CHUNK_SIZE, sink );
 		return ok();
 	}
-	
+
+	/**
+	 * Deletes a blob (file) from the filesystem.
+	 *
+	 * @param path The path to the file to be deleted
+	 * @return A Result indicating success or failure of the delete operation
+	 */
 	@Override
 	public Result<Void> delete(String path) {
 		if (path == null)
@@ -90,7 +121,14 @@ public class FilesystemStorage implements BlobStorage {
 		}
 		return ok();
 	}
-	
+
+	/**
+	 * Converts a path string to a File object.
+	 * It ensures that the parent directories of the file exist, creating them if necessary.
+	 *
+	 * @param path The path to the file
+	 * @return The corresponding File object
+	 */
 	private File toFile(String path) {
 		var res = new File( rootDir + path );
 		
